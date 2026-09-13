@@ -13,13 +13,17 @@ from __future__ import annotations
 import json
 import sys
 import time
+import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import clients, db, interview, jobs, materials, packaging, questions  # noqa: E402
 
-ATTACH = Path('/Users/wjx/.dsh/attachments/v1/objects')
+# 端到端脚本要真实素材。路径不写死——换台机器就该换目录。
+# 用 E2E_ATTACH_DIR 指定，默认取 DSH 的附件目录。
+ATTACH = Path(os.environ.get('E2E_ATTACH_DIR')
+              or (Path.home() / '.dsh' / 'attachments' / 'v1' / 'objects'))
 RESUME_IMG = ATTACH / 'b1' / 'b1e7043022741b18a95e0181df25c4c102cfe203b87104fd970aa4665e0be53d'
 JD_IMG = ATTACH / '87' / '87c19430f93dcb8c56d625f7e90106f38c1a5cb599dce5ff11e6f864d198cc47'
 
@@ -97,7 +101,7 @@ def main() -> int:
                 "UPDATE project SET status='confirmed' WHERE status='unconfirmed'")
             conn.execute(
                 "UPDATE project_point SET status='confirmed' WHERE status='unconfirmed'")
-            baseline = Path('/Users/wjx/Agent-100-Days/求职助手/00-档案/简历基线.md')
+            baseline = importer.WORKSPACE / '求职助手' / '00-档案' / '简历基线.md'
             text = baseline.read_text(encoding='utf-8')
             i = text.find('## 一、定制简历正文')
             content = text[i:] if i >= 0 else text
