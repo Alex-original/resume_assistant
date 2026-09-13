@@ -49,11 +49,17 @@ cp .env.example .env      # 填 DEEPSEEK_API_KEY 和 DASHSCOPE_API_KEY
 
 ## 部署到服务器
 
-见 [`部署文档.md`](部署文档.md)。Docker + Caddy，一条命令起：
+见 [`部署文档.md`](部署文档.md)。服务器上（Linux）：
 
 ```bash
-docker compose up -d --build
+git clone https://github.com/Alex-original/resume_assistant.git
+cd resume_assistant
+cp .env.example .env && vi .env        # 填 API key、SECRET_KEY、ADMIN_PASSWORD
+bash scripts/deploy.sh                 # 装 Docker、起服务、验证并打印访问地址
 ```
+
+`deploy.sh` 会检查 `.env` 是否填全、等服务健康、验证登录门禁真的生效，
+最后告诉你用什么地址访问。Mac 上跑会被直接拦住（那是给服务器的）。
 
 ## 目录
 
