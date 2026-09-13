@@ -1,0 +1,43 @@
+# ════════════════════════════════════════════════════════
+#  备案前：用 IP + 自签证书
+#
+#  .env 里设：SITE_ADDRESS=:443
+#  访问：https://你的公网IP
+#
+#  浏览器会提示"证书不受信任"——点「高级 → 继续前往」。
+#  这是正常的：自签证书没有权威机构背书。**功能完全不受影响**，
+#  手机麦克风也能用（因为它只要求 HTTPS，不要求证书受信）。
+#
+#  备案下来后换成 Caddyfile.domain（见那份的说明）。
+# ════════════════════════════════════════════════════════
+
+{
+	# 自签证书的签发机构名，随便填，只影响证书里显示的组织
+	local_certs
+}
+
+:443 {
+	# 用 Caddy 内置 CA 签一张证书给这个 IP
+	tls internal
+
+	encode zstd gzip
+
+	reverse_proxy app:7870 {
+		# ★ 语音是流式返回的（边合成边播）。不加这句，Caddy 会把响应攒齐
+		# 再转发，首字节 0.45 秒的优势就没了，又变回 3 秒的"生硬"。
+		flush_interval -1
+	}
+
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

@@ -1,0 +1,14 @@
+# 虚拟环境、缓存、测试数据都不要进镜像
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+tests/
+*.db
+*.db-wal
+*.db-shm
+*.bak*
+*.pem
+.env
+.DS_Store

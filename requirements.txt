@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+python-multipart
+markdown
+python-docx
+pypdfium2
+Pillow
+websockets

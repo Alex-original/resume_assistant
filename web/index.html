@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F6F7F9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>求职助手</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- 顶部栏。一级页面不显示返回箭头（标签栏能直达的页面没有"上一页"）。 -->
+<header class="topbar" id="topbar">
+  <button class="topbar__back" id="btn-back" hidden aria-label="返回">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12.5 4.5L7 10l5.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <h1 class="topbar__title" id="topbar-title">求职助手</h1>
+  <button class="topbar__action" id="btn-status" aria-label="当前状态">
+    <span class="dot" id="status-dot"></span>
+  </button>
+</header>
+
+<!-- 桌面端侧边栏（≥1024px 显示，内容由 app.js 渲染） -->
+<aside class="sidebar" id="sidebar"></aside>
+
+<!-- 页面容器 -->
+<main id="view"></main>
+
+<!-- 移动端底部标签栏（胶囊式，内容由 app.js 渲染） -->
+<nav class="tabbar" id="tabbar"></nav>
+
+<div class="toast" id="toast"></div>
+
+<!-- 通用弹层 -->
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet__mask" data-close></div>
+  <div class="sheet__body">
+    <div class="sheet__head">
+      <strong id="sheet-title"></strong>
+      <button class="btn btn--sm" data-close>关闭</button>
+    </div>
+    <div class="sheet__content" id="sheet-content"></div>
+  </div>
+</div>
+
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

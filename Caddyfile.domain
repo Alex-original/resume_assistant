@@ -1,0 +1,41 @@
+# ════════════════════════════════════════════════════════
+#  备案后：用域名 + Let's Encrypt 真证书
+#
+#  前提（缺一不可）：
+#    1. ICP 备案已通过
+#    2. 域名 A 记录已解析到这台服务器的公网 IP
+#    3. 阿里云安全组放行 80 和 443
+#
+#  .env 里设：
+#    SITE_ADDRESS=你的域名            （比如 job.example.com）
+#    ACME_EMAIL=你的邮箱              （证书要过期时会通知你）
+#    CADDYFILE=Caddyfile.domain
+#
+#  然后：docker compose up -d caddy
+#  Caddy 会自动申请证书，90 天到期前自动续，不用管。
+# ════════════════════════════════════════════════════════
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	reverse_proxy app:7870 {
+		flush_interval -1
+	}
+
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

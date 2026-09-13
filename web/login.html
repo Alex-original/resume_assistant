@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F6F7F9">
+<title>求职助手 · 登录</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div class="auth-wrap">
+  <div class="auth-brand">
+    <span class="brand-dot"></span>
+    <span class="brand-name">求职助手</span>
+  </div>
+
+  <div class="auth-card">
+    <div class="seg-bar" id="tabs">
+      <button class="seg active" data-tab="login">登录</button>
+      <button class="seg" data-tab="register">注册</button>
+    </div>
+
+    <label class="fld">
+      <span>用户名</span>
+      <input type="text" id="username" autocomplete="username" placeholder="至少 3 个字符">
+    </label>
+
+    <label class="fld" id="name-row" hidden>
+      <span>怎么称呼你（可选）</span>
+      <input type="text" id="display-name" autocomplete="nickname" placeholder="比如：嘉雄">
+    </label>
+
+    <label class="fld">
+      <span>密码</span>
+      <input type="password" id="password" autocomplete="current-password" placeholder="至少 6 位">
+    </label>
+
+    <div class="notice notice--danger" id="err" hidden></div>
+
+    <button class="btn btn--primary btn--block btn--lg" id="submit">登录</button>
+
+    <p class="auth-note" id="note">
+      每个人有自己独立的数据空间——你的简历、面试记录、材料都只有你自己能看到。
+    </p>
+  </div>
+</div>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+let tab = 'login';
+
+function setTab(next) {
+  tab = next;
+  document.querySelectorAll('#tabs .seg').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tab === next);
+  });
+  $('#name-row').hidden = next !== 'register';
+  $('#submit').textContent = next === 'register' ? '注册并进入' : '登录';
+  $('#password').setAttribute('autocomplete',
+    next === 'register' ? 'new-password' : 'current-password');
+  $('#err').hidden = true;
+}
+
+document.querySelectorAll('#tabs .seg').forEach((b) => {
+  b.onclick = () => setTab(b.dataset.tab);
+});
+
+function fail(msg) {
+  const box = $('#err');
+  box.textContent = msg;
+  box.hidden = false;
+}
+
+async function submit() {
+  const username = $('#username').value.trim();
+  const password = $('#password').value;
+  if (!username || !password) { fail('用户名和密码都要填'); return; }
+
+  const btn = $('#submit');
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = tab === 'register' ? '注册中…' : '登录中…';
+  try {
+    const res = await fetch(`/api/auth/${tab}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username, password,
+        display_name: $('#display-name').value.trim(),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || '失败');
+    location.href = '/';
+  } catch (e) {
+    fail(e.message);
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
+$('#submit').onclick = submit;
+document.querySelectorAll('input').forEach((i) => {
+  i.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+});
+$('#username').focus();
+</script>
+</body>
+</html>

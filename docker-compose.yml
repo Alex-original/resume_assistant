@@ -1,0 +1,65 @@
+# 求职助手 · 部署编排
+#
+#   docker compose up -d --build
+#
+# 两个容器：
+#   app    —— FastAPI 应用（只在内网，不直接对外）
+#   caddy  —— 反向代理 + HTTPS，唯一对外的入口
+#
+# HTTPS 是必须的，不是可选项：手机浏览器只在安全上下文里给麦克风权限。
+# 没有 HTTPS，模拟面试的语音功能直接不可用。
+
+services:
+  app:
+    build: .
+    image: job-assistant:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # 时区影响「今日用量」的日期口径，别用 UTC，否则早上 8 点前算前一天
+      TZ: Asia/Shanghai
+      # 这个部署形态下，资料源目录不存在（用户从网页上传），导入功能用不到
+      WORKSPACE_DIR: /app
+    volumes:
+      - ./data:/app/data          # 数据库、上传的文件、账号库都在这里
+    expose:
+      - "7870"                     # 只在 compose 内网暴露，不映射到宿主机
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7870/health', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"           # 日志别把磁盘写满
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:443}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      # 备案前用 Caddyfile.ip（自签证书），备案后换 Caddyfile.domain（真证书）
+      - ./${CADDYFILE:-Caddyfile.ip}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # 证书存这儿，别删，删了要重新签发
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

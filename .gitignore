@@ -1,0 +1,16 @@
+# 依赖与缓存
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 数据与密钥——绝对不能进仓库
+data/
+.env
+*.pem
+*.key
+*.db
+*.db-wal
+*.db-shm
+*.bak*
+.DS_Store
