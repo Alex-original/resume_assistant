@@ -59,6 +59,14 @@ DEFAULTS = {
     'COOKIE_SECURE': '',
     'WORKSPACE_DIR': '',
     'ASSISTANT_DIR': '',
+    # ── 手机号登录 / 阿里云短信 ──
+    # 和 video_note 项目用的是同一套变量名，配置可以直接搬过来
+    'ADMIN_PHONE': '',
+    'ALIYUN_ACCESS_KEY_ID': '',
+    'ALIYUN_ACCESS_KEY_SECRET': '',
+    'SMS_SIGN_NAME': '',
+    'SMS_TEMPLATE_CODE': '',
+    'SMS_DEV_MODE': '',        # =1 时把验证码也返回给前端（仅本机开发用）
 }
 
 

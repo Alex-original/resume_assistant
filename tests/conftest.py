@@ -23,8 +23,7 @@ from app import clients as clients_mod  # noqa: E402
 from app import config as config_mod     # noqa: E402
 from app import db as db_mod             # noqa: E402
 
-TEST_USER = 'tester'
-TEST_PASSWORD = 'pw123456'
+TEST_PHONE = '13800000000'
 
 
 @pytest.fixture()
@@ -41,6 +40,12 @@ def temp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(config_mod, 'UPLOAD_DIR', upload)
     monkeypatch.setattr(config_mod, 'DATA_DIR', tmp_path)
     monkeypatch.setattr(auth_mod, 'CENTER_DB', tmp_path / 'app.db')
+    # 测试绝不真发短信：清掉短信配置（走日志兜底），
+    # 并打开 SMS_DEV_MODE 好让验证码能从响应里拿到
+    for k in ('ALIYUN_ACCESS_KEY_ID', 'ALIYUN_ACCESS_KEY_SECRET',
+              'SMS_SIGN_NAME', 'SMS_TEMPLATE_CODE'):
+        monkeypatch.setitem(config_mod.CONFIG, k, '')
+    monkeypatch.setitem(config_mod.CONFIG, 'SMS_DEV_MODE', '1')
     db_mod.init_db()
     return db_mod
 
@@ -53,7 +58,7 @@ def user(temp_db):
     设了之后 `db.connect()` 就连到 data/users/uN.db——也就是
     多用户模式下真实发生的事，测试跑的就是生产路径。
     """
-    u = auth_mod.create_user(TEST_USER, TEST_PASSWORD, '测试用户')
+    u = auth_mod.create_user(TEST_PHONE, '测试用户')
     db_mod.set_current_user(u['id'])
     yield u
     db_mod.set_current_user(None)
@@ -199,3 +204,19 @@ def _reset_current_user():
     db_mod.set_current_user(None)
     yield
     db_mod.set_current_user(None)
+
+
+def phone_login(client, phone: str = TEST_PHONE):
+    """
+    走一次完整的「发验证码 + 登录」，让 client 带上会话 cookie。
+
+    测试里短信走日志兜底，验证码会通过 dev_code 返回来
+    （只有 SMS_DEV_MODE=1 时才会，生产环境不会）。
+    """
+    r = client.post('/api/auth/send-code', json={'phone': phone})
+    assert r.status_code == 200, f'发验证码失败：{r.text}'
+    code = r.json()['dev_code']
+    assert code, '测试里应该能拿到 dev_code（检查 SMS_DEV_MODE）'
+    r = client.post('/api/auth/login', json={'phone': phone, 'code': code})
+    assert r.status_code == 200, f'登录失败：{r.text}'
+    return r.json()

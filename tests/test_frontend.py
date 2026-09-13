@@ -40,9 +40,9 @@ def client(temp_db):
 def auth_client(user):
     """已登录的客户端。测需要鉴权的接口时用它。"""
     from app import main
+    from tests.conftest import phone_login
     c = TestClient(main.app)
-    r = c.post('/api/auth/login', json={'username': 'tester', 'password': 'pw123456'})
-    assert r.status_code == 200, f'测试登录失败：{r.text}'
+    phone_login(c)
     return c
 
 

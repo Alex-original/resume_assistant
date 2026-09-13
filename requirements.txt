@@ -8,3 +8,5 @@ python-docx
 pypdfium2
 Pillow
 websockets
+alibabacloud_dysmsapi20170525>=1.0.0
+alibabacloud_tea_openapi

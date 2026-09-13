@@ -144,6 +144,15 @@ a { color: var(--primary); }
   outline: none; transition: border-color .15s, background .15s;
 }
 .auth-card input:focus { border-color: var(--blue); background: var(--card); }
+/* 验证码一行：输入框 + 发送按钮 */
+.code-row { display: flex; gap: 8px; align-items: stretch; }
+.code-row input { flex: 1; min-width: 0; }
+.code-btn {
+  flex: none; height: 46px; padding: 0 14px; font-size: 13px;
+  white-space: nowrap;
+}
+.code-btn:disabled { opacity: .55; }
+
 .auth-note {
   font-size: 12px; line-height: 18px; color: var(--muted);
   margin: 2px 0 0; text-align: center;

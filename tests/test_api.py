@@ -12,12 +12,11 @@ from app.main import app
 
 
 @pytest.fixture()
-def client(user):
-    """已登录的客户端：走一次真实登录拿 cookie，跟浏览器一样。"""
+def client(user, temp_db):
+    """已登录的客户端：走一次真实的「发码 + 登录」，跟浏览器一样。"""
+    from tests.conftest import phone_login
     with TestClient(app) as c:
-        r = c.post('/api/auth/login',
-                   json={'username': 'tester', 'password': 'pw123456'})
-        assert r.status_code == 200, f'测试登录失败：{r.text}'
+        phone_login(c)
         yield c
 
 

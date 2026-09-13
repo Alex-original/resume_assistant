@@ -537,7 +537,11 @@ async function pageSettings(view, { setTopbar }) {
     view.appendChild(el('div', { class: 'block' }, [
       blockHead('我的账号', chip(me.user.is_admin ? '管理员' : '成员',
         me.user.is_admin ? 'blue' : ''), 'strong'),
-      el('p', { class: 'body-txt', text: `${me.user.display_name}（${me.user.username}）` }),
+      el('p', { class: 'body-txt', text: `${me.user.display_name}（${me.user.phone_masked || me.user.phone}）` }),
+      el('p', { class: 'body-txt', style: { fontSize: '12px', color: 'var(--muted)' },
+        text: me.sms && me.sms.configured
+          ? `短信通道正常（签名：${me.sms.sign_name}）`
+          : '短信服务未配置——验证码会打印到服务器日志' }),
       el('p', { class: 'body-txt', style: { fontSize: '12px', color: 'var(--muted)' },
         text: me.usage.quota > 0
           ? `今日 AI 用量 ${me.usage.used} / ${me.usage.quota} 次（明天自动重置）`

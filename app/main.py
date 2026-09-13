@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import (auth, clients, config, db, interview, materials, packaging,
-               questions, resume_chat)
+               questions, resume_chat, sms)
 from .questions import ROUND_LABEL
 
 WEB_DIR = Path(__file__).resolve().parent.parent / 'web'
@@ -35,18 +35,58 @@ app = FastAPI(title='求职助手', version='1.0.0',
 @app.on_event('startup')
 def _startup() -> None:
     db.init_db()          # 单用户模式的旧库（本地开发时还在用）
-    with auth.center():   # 中心库：账号 + 用量
+    with auth.center():   # 中心库：账号 + 验证码 + 用量
         pass
+
+    # 从「用户名+密码」迁到「手机号」。必须在建号之前跑，
+    # 否则会往老结构里插数据然后报错。
+    admin_phone = config.get('ADMIN_PHONE').strip()
+    out = auth.migrate_to_phone_login(admin_phone)
+    if out.get('migrated'):
+        logger.warning('账号体系已迁移到手机号：%s 个账号', out['users'])
+        if out.get('admin_bound'):
+            logger.warning('管理员已绑定 %s', out['admin_phone'])
+        else:
+            logger.error('⚠️ 没有可用的 ADMIN_PHONE，管理员无法登录！'
+                         '请在 .env 里设置 ADMIN_PHONE 后重启')
+        # ★ 有数据但没手机号的账号会被锁在门外，必须喊出来。
+        # 实测撞到过：用户注册的普通账号里有真实简历和面试，手机号却绑给了空的管理员账号。
+        for o in out.get('orphans') or []:
+            logger.error('⚠️ 账号 #%s「%s」没有手机号，登录不了。'
+                         '如果那里面有数据，用 bind_phone() 把手机号挪过去',
+                         o['id'], o['name'])
+
+    # 每次启动都检查一遍（不只是迁移那一次）
+    for o in auth.accounts_without_phone():
+        if o['phone'].startswith('imported-') or o['phone'].startswith('retired-'):
+            logger.warning('账号 #%s「%s」当前无法登录（手机号=%s）',
+                           o['id'], o['display_name'], o['phone'])
+
     if not auth.list_users():
-        # 第一个账号自动成为管理员，用户名密码从环境变量读；
-        # 没设就用 admin / admin12345 并打一条醒目提示（用户登录后应立刻改）
-        name = config.get('ADMIN_USERNAME', 'admin') or 'admin'
-        pwd = config.get('ADMIN_PASSWORD', '') or 'admin12345'
-        admin = auth.create_user(name, pwd, '管理员', is_admin=True)
-        logger.warning('已创建初始管理员账号 %s —— 请登录后立刻改密码', name)
-        out = auth.adopt_legacy_data(admin['id'])
-        if out.get('adopted'):
-            logger.warning('把原有的单用户数据交给了 %s（%s 条记录）', name, out['rows'])
+        if not (admin_phone and sms.valid_phone(admin_phone)):
+            logger.error('⚠️ 账号库是空的，但 ADMIN_PHONE 没设或格式不对，'
+                         '没人能登录。请在 .env 里设置 ADMIN_PHONE 后重启')
+        else:
+            admin = auth.create_user(admin_phone, '管理员', is_admin=True)
+            logger.warning('已创建管理员账号 %s', admin_phone)
+            adopted = auth.adopt_legacy_data(admin['id'])
+            if adopted.get('adopted'):
+                logger.warning('把原有的单用户数据交给了管理员（%s 条记录）',
+                               adopted['rows'])
+    else:
+        # 已有账号但没有一个有手机号 → 谁都进不来，必须在日志里喊出来
+        with auth.center() as conn:
+            ok = conn.execute(
+                "SELECT COUNT(*) AS n FROM users WHERE phone LIKE '1%' AND LENGTH(phone)=11"
+            ).fetchone()['n']
+        if not ok:
+            logger.error('⚠️ 所有账号都没有可用手机号，没人能登录！'
+                         '请设置 ADMIN_PHONE 后重启')
+
+    if not sms.configured():
+        logger.warning('短信服务未配置（缺 ALIYUN_ACCESS_KEY_ID / _SECRET / '
+                       'SMS_SIGN_NAME / SMS_TEMPLATE_CODE）——验证码会打印到本日志，'
+                       '配置齐全后自动切换到真实短信')
 
 
 # ══════════════════════════ 登录与鉴权 ══════════════════════════
@@ -93,10 +133,13 @@ async def auth_middleware(request, call_next):
     return await call_next(request)
 
 
-class Credentials(BaseModel):
-    username: str
-    password: str
-    display_name: str = ''
+class PhoneIn(BaseModel):
+    phone: str
+
+
+class LoginIn(BaseModel):
+    phone: str
+    code: str
 
 
 @app.get('/login')
@@ -104,24 +147,36 @@ def login_page() -> FileResponse:
     return FileResponse(WEB_DIR / 'login.html', headers=NO_CACHE)
 
 
-@app.post('/api/auth/register')
-def register(body: Credentials) -> dict:
-    if not auth.registration_open():
-        raise HTTPException(403, '管理员已关闭注册')
-    try:
-        user = auth.create_user(body.username, body.password, body.display_name)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    resp = JSONResponse({'ok': True, 'user': _public_user(user)})
-    _set_session_cookie(resp, user['id'])
-    return resp
+@app.post('/api/auth/send-code')
+def send_code(body: PhoneIn) -> dict:
+    """
+    发验证码。同号 60 秒内只能发一次，一小时最多 8 条。
+
+    短信没配置时会把验证码打印到**服务端日志**（不通过接口返回——
+    否则任何人都能拿到别人的验证码），配置齐全后自动走真实短信。
+    """
+    out = sms.send_code(body.phone)
+    if not out['ok']:
+        raise HTTPException(400, out['message'])
+    # 只有本机开发（SMS_DEV_MODE=1）才把验证码回给前端，方便调试
+    dev = config.get('SMS_DEV_MODE') == '1'
+    return {'ok': True, 'message': out['message'],
+            'dev_code': out['dev_code'] if dev else '',
+            'sms_configured': sms.configured()}
 
 
 @app.post('/api/auth/login')
-def login(body: Credentials) -> dict:
-    user = auth.authenticate(body.username, body.password)
-    if not user:
-        raise HTTPException(401, '用户名或密码不对')
+def login(body: LoginIn) -> dict:
+    """手机号 + 验证码登录。没注册过就自动建号（受注册开关控制）。"""
+    if not sms.valid_phone(body.phone):
+        raise HTTPException(400, '手机号格式不对，应该是 11 位数字')
+    if not sms.verify_code(body.phone, body.code):
+        raise HTTPException(401, '验证码错误或已过期')
+    try:
+        user = auth.login_or_register(body.phone,
+                                      registration_open=auth.registration_open())
+    except ValueError as exc:
+        raise HTTPException(403, str(exc)) from exc
     resp = JSONResponse({'ok': True, 'user': _public_user(user)})
     _set_session_cookie(resp, user['id'])
     return resp
@@ -143,13 +198,16 @@ def me(request: Request) -> dict:
     if user is None:
         raise HTTPException(401, '未登录')
     return {'user': _public_user(user), 'usage': auth.quota_state(user),
-            'registration_open': auth.registration_open()}
+            'registration_open': auth.registration_open(),
+            'sms': sms.status()}
 
 
 def _public_user(user: dict) -> dict:
     """只把能对外的字段给前端——密码哈希之类绝对不出现在响应里。"""
-    return {'id': user['id'], 'username': user['username'],
-            'display_name': user.get('display_name') or user['username'],
+    phone = user.get('phone') or ''
+    return {'id': user['id'], 'phone': phone,
+            'phone_masked': f'{phone[:3]}****{phone[-4:]}' if len(phone) == 11 else phone,
+            'display_name': user.get('display_name') or phone,
             'is_admin': bool(user.get('is_admin'))}
 
 

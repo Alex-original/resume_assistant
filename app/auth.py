@@ -69,21 +69,32 @@ def _secret() -> bytes:
 CENTER_SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    username      TEXT    NOT NULL UNIQUE,
+    phone         TEXT    NOT NULL UNIQUE,        -- 登录凭据就是这个
     display_name  TEXT    NOT NULL DEFAULT '',
-    password_hash TEXT    NOT NULL,
     is_admin      INTEGER NOT NULL DEFAULT 0,
     is_active     INTEGER NOT NULL DEFAULT 1,
-    daily_quota   INTEGER NOT NULL DEFAULT 300,   -- 每人每天能调用多少次 AI
+    daily_quota   INTEGER NOT NULL DEFAULT 300,
     created_at    TEXT    NOT NULL,
     last_login_at TEXT    NOT NULL DEFAULT ''
 );
 
+-- 验证码。放中心库而不是各人的库里：登录的时候还没有"当前用户"，
+-- 根本不知道该开哪个库。
+CREATE TABLE IF NOT EXISTS sms_code (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    phone      TEXT    NOT NULL,
+    code       TEXT    NOT NULL,
+    expires_at REAL    NOT NULL,
+    used       INTEGER NOT NULL DEFAULT 0,
+    created_at REAL    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sms_phone ON sms_code(phone, created_at);
+
 CREATE TABLE IF NOT EXISTS usage_log (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id  INTEGER NOT NULL,
-    day      TEXT    NOT NULL,          -- YYYY-MM-DD
-    kind     TEXT    NOT NULL,          -- chat | vision | asr | tts
+    day      TEXT    NOT NULL,
+    kind     TEXT    NOT NULL,
     calls    INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_usage_day ON usage_log(user_id, day);
@@ -93,7 +104,6 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 """
-
 
 def center() -> sqlite3.Connection:
     CENTER_DB.parent.mkdir(parents=True, exist_ok=True)
@@ -122,23 +132,6 @@ def registration_open() -> bool:
 
 # ══════════════════ 账号 ══════════════════
 
-def _hash_password(password: str, salt: bytes | None = None) -> str:
-    salt = salt or secrets.token_bytes(16)
-    dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 120_000)
-    return f'pbkdf2${base64.b64encode(salt).decode()}${base64.b64encode(dk).decode()}'
-
-
-def _verify_password(password: str, stored: str) -> bool:
-    try:
-        _, salt_b64, dk_b64 = stored.split('$')
-        salt = base64.b64decode(salt_b64)
-        expect = base64.b64decode(dk_b64)
-    except (ValueError, TypeError):
-        return False
-    got = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 120_000)
-    return hmac.compare_digest(got, expect)
-
-
 def user_db_path(user_id: int) -> Path:
     """每个人的业务数据单独一个文件。"""
     d = config.DATA_DIR / 'users'
@@ -146,26 +139,28 @@ def user_db_path(user_id: int) -> Path:
     return d / f'u{user_id}.db'
 
 
-def create_user(username: str, password: str, display_name: str = '',
-                is_admin: bool = False) -> dict:
-    username = (username or '').strip()
-    if len(username) < 3:
-        raise ValueError('用户名至少 3 个字符')
-    if len(password or '') < 6:
-        raise ValueError('密码至少 6 位')
+def create_user(phone: str, display_name: str = '', is_admin: bool = False,
+                daily_quota: int = 300) -> dict:
+    """建号。手机号就是账号——首次登录时自动调用。"""
+    from . import sms
+    phone = sms.normalize(phone)
+    if not sms.valid_phone(phone):
+        raise ValueError('手机号格式不对')
     with center() as c:
-        exists = c.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
-        if exists:
-            raise ValueError('这个用户名已经被用了')
+        if c.execute('SELECT id FROM users WHERE phone = ?', (phone,)).fetchone():
+            raise ValueError('这个手机号已经注册过了')
         cur = c.execute(
-            'INSERT INTO users (username, display_name, password_hash, is_admin, '
-            'created_at) VALUES (?,?,?,?,?)',
-            (username, display_name.strip() or username, _hash_password(password),
-             1 if is_admin else 0, db.now_iso()))
+            'INSERT INTO users (phone, display_name, is_admin, daily_quota, created_at) '
+            'VALUES (?,?,?,?,?)',
+            (phone, (display_name or '').strip() or _mask(phone),
+             1 if is_admin else 0, daily_quota, db.now_iso()))
         uid = int(cur.lastrowid)
-    # 立刻把个人库建出来，避免第一次请求时才发现问题
-    db.init_user_db(uid)
+    db.init_user_db(uid)          # 立刻把个人库建出来
     return get_user(uid)
+
+
+def _mask(phone: str) -> str:
+    return f'{phone[:3]}****{phone[-4:]}' if len(phone) == 11 else phone
 
 
 def get_user(user_id: int) -> dict | None:
@@ -174,19 +169,30 @@ def get_user(user_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def get_user_by_name(username: str) -> dict | None:
+def get_user_by_phone(phone: str) -> dict | None:
+    from . import sms
+    phone = sms.normalize(phone)
     with center() as c:
-        row = c.execute('SELECT * FROM users WHERE username = ?',
-                        ((username or '').strip(),)).fetchone()
+        row = c.execute('SELECT * FROM users WHERE phone = ?', (phone,)).fetchone()
     return dict(row) if row else None
 
 
-def authenticate(username: str, password: str) -> dict | None:
-    user = get_user_by_name(username)
-    if not user or not user['is_active']:
-        return None
-    if not _verify_password(password, user['password_hash']):
-        return None
+def login_or_register(phone: str, registration_open: bool = True) -> dict:
+    """
+    验证码校验通过后调用：有号就登录，没号就建号。
+
+    注册开关只拦"新号"，已有账号永远能登进来——
+    不然一关注册，所有人包括你自己都进不去了。
+    """
+    from . import sms
+    phone = sms.normalize(phone)
+    user = get_user_by_phone(phone)
+    if user is None:
+        if not registration_open:
+            raise ValueError('管理员关闭了新用户注册')
+        user = create_user(phone)
+    if not user['is_active']:
+        raise ValueError('这个账号已被停用')
     with center() as c:
         c.execute('UPDATE users SET last_login_at = ? WHERE id = ?',
                   (db.now_iso(), user['id']))
@@ -196,20 +202,10 @@ def authenticate(username: str, password: str) -> dict | None:
 def list_users() -> list[dict]:
     with center() as c:
         rows = c.execute(
-            'SELECT id, username, display_name, is_admin, is_active, daily_quota, '
+            'SELECT id, phone, display_name, is_admin, is_active, daily_quota, '
             'created_at, last_login_at FROM users ORDER BY id').fetchall()
     return [dict(r) for r in rows]
 
-
-def set_password(user_id: int, password: str) -> None:
-    if len(password or '') < 6:
-        raise ValueError('密码至少 6 位')
-    with center() as c:
-        c.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-                  (_hash_password(password), user_id))
-
-
-# ══════════════════ 会话签名 ══════════════════
 
 def make_session(user_id: int) -> str:
     exp = int(time.time()) + SESSION_DAYS * 86400
@@ -268,7 +264,7 @@ def quota_state(user: dict) -> dict:
 def usage_by_user() -> list[dict]:
     with center() as c:
         rows = c.execute(
-            'SELECT u.id, u.username, u.display_name, u.daily_quota, '
+            'SELECT u.id, u.phone, u.display_name, u.daily_quota, '
             '  COALESCE(SUM(CASE WHEN g.day = ? THEN g.calls END), 0) AS today_calls, '
             '  COALESCE(SUM(g.calls), 0) AS total_calls '
             'FROM users u LEFT JOIN usage_log g ON g.user_id = u.id '
@@ -324,3 +320,101 @@ def adopt_legacy_data(admin_id: int) -> dict:
         if side.is_file():
             shutil.copy2(side, Path(str(target) + suffix))
     return {'adopted': True, 'rows': rows, 'from': str(legacy), 'to': str(target)}
+
+# ══════════════════ 从「用户名+密码」迁到「手机号」
+
+def migrate_to_phone_login(admin_phone: str) -> dict:
+    """
+    把老的中心库（users 表有 username/password_hash）迁成手机号版本。
+
+    老表里 username / password_hash 都是 NOT NULL，SQLite 改不了列的约束，
+    只能重建表。迁移时保留 id / 昵称 / 管理员标记 / 额度 / 用量，
+    把管理员绑到 `admin_phone` 上——**不绑的话改完之后没人能登录**。
+
+    个人数据库文件（data/users/uN.db）不动，id 保持不变，所以数据不会丢。
+    """
+    from . import sms
+
+    with center() as c:
+        cols = {r['name'] for r in c.execute('PRAGMA table_info(users)')}
+        if 'phone' in cols and 'password_hash' not in cols:
+            return {'migrated': False, 'reason': '已经是手机号版本'}
+
+        rows = [dict(r) for r in c.execute('SELECT * FROM users ORDER BY id')]
+        has_password = 'password_hash' in cols
+
+        if has_password:
+            c.execute('ALTER TABLE users RENAME TO users_old')
+        c.executescript("""
+            CREATE TABLE users (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                phone         TEXT    NOT NULL UNIQUE,
+                display_name  TEXT    NOT NULL DEFAULT '',
+                is_admin      INTEGER NOT NULL DEFAULT 0,
+                is_active     INTEGER NOT NULL DEFAULT 1,
+                daily_quota   INTEGER NOT NULL DEFAULT 300,
+                created_at    TEXT    NOT NULL,
+                last_login_at TEXT    NOT NULL DEFAULT ''
+            );
+        """)
+
+        phone = sms.normalize(admin_phone)
+        bound = 0
+        orphans = []
+        for r in rows:
+            is_admin = int(r.get('is_admin') or 0)
+            # 第一个管理员绑到 ADMIN_PHONE；其他人暂时没有手机号
+            bind = phone if (is_admin and bound == 0 and sms.valid_phone(phone)) else None
+            if bind:
+                bound += 1
+            else:
+                orphans.append({'id': r['id'],
+                                'name': r.get('display_name') or r.get('username') or ''})
+            c.execute(
+                'INSERT INTO users (id, phone, display_name, is_admin, is_active, '
+                'daily_quota, created_at, last_login_at) VALUES (?,?,?,?,?,?,?,?)',
+                (r['id'], bind or f'imported-{r["id"]}',
+                 r.get('display_name') or r.get('username') or '', is_admin,
+                 int(r.get('is_active') or 1), int(r.get('daily_quota') or 300),
+                 r.get('created_at') or db.now_iso(), r.get('last_login_at') or ''))
+        if has_password:
+            c.execute('DROP TABLE users_old')
+
+    return {'migrated': True, 'users': len(rows), 'admin_bound': bool(bound),
+            'admin_phone': sms.normalize(admin_phone) if bound else '',
+            'orphans': orphans}
+
+
+def bind_phone(user_id: int, phone: str) -> dict:
+    """
+    把某个账号改绑到新的手机号（原号主自动腾退）。
+
+    为什么需要这个：迁移时手机号默认给了**管理员**，但真正有数据的
+    可能不是管理员账号——实测就撞上了：用户注册的普通账号里有真实简历和面试，
+    手机号却绑给了空的管理员账号，等于数据被锁在门外。
+    这种情况要能把手机号挪到有数据的账号上。
+    """
+    from . import sms
+    phone = sms.normalize(phone)
+    if not sms.valid_phone(phone):
+        raise ValueError('手机号格式不对')
+    with center() as c:
+        if c.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone() is None:
+            raise ValueError('账号不存在')
+        # UNIQUE 约束：先把占着这个号的账号腾开
+        holder = c.execute('SELECT id FROM users WHERE phone = ?', (phone,)).fetchone()
+        if holder and holder['id'] != user_id:
+            c.execute('UPDATE users SET phone = ? WHERE id = ?',
+                      (f'retired-{holder["id"]}', holder['id']))
+        c.execute('UPDATE users SET phone = ? WHERE id = ?', (phone, user_id))
+    return get_user(user_id)
+
+
+def accounts_without_phone() -> list[dict]:
+    """列出登录不了的账号（手机号不是合法 11 位）。"""
+    with center() as c:
+        rows = c.execute(
+            "SELECT id, phone, display_name FROM users "
+            "WHERE phone NOT LIKE '1%' OR LENGTH(phone) != 11 ORDER BY id").fetchall()
+    return [dict(r) for r in rows]
+

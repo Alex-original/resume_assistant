@@ -16,95 +16,118 @@
   </div>
 
   <div class="auth-card">
-    <div class="seg-bar" id="tabs">
-      <button class="seg active" data-tab="login">登录</button>
-      <button class="seg" data-tab="register">注册</button>
-    </div>
-
     <label class="fld">
-      <span>用户名</span>
-      <input type="text" id="username" autocomplete="username" placeholder="至少 3 个字符">
-    </label>
-
-    <label class="fld" id="name-row" hidden>
-      <span>怎么称呼你（可选）</span>
-      <input type="text" id="display-name" autocomplete="nickname" placeholder="比如：嘉雄">
+      <span>手机号</span>
+      <input type="tel" id="phone" inputmode="numeric" autocomplete="tel"
+             maxlength="11" placeholder="11 位手机号">
     </label>
 
     <label class="fld">
-      <span>密码</span>
-      <input type="password" id="password" autocomplete="current-password" placeholder="至少 6 位">
+      <span>验证码</span>
+      <div class="code-row">
+        <input type="text" id="code" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" placeholder="6 位数字">
+        <button class="btn btn--soft code-btn" id="send">发送验证码</button>
+      </div>
     </label>
 
     <div class="notice notice--danger" id="err" hidden></div>
+    <div class="notice notice--info" id="hint" hidden></div>
 
-    <button class="btn btn--primary btn--block btn--lg" id="submit">登录</button>
+    <button class="btn btn--primary btn--block btn--lg" id="submit">登录 / 注册</button>
 
-    <p class="auth-note" id="note">
-      每个人有自己独立的数据空间——你的简历、面试记录、材料都只有你自己能看到。
+    <p class="auth-note">
+      没注册过会自动创建账号。<br>
+      每个人有自己独立的数据空间——简历、面试记录、材料都只有你自己能看到。
     </p>
   </div>
 </div>
 
 <script type="module">
 const $ = (s) => document.querySelector(s);
-let tab = 'login';
-
-function setTab(next) {
-  tab = next;
-  document.querySelectorAll('#tabs .seg').forEach((b) => {
-    b.classList.toggle('active', b.dataset.tab === next);
-  });
-  $('#name-row').hidden = next !== 'register';
-  $('#submit').textContent = next === 'register' ? '注册并进入' : '登录';
-  $('#password').setAttribute('autocomplete',
-    next === 'register' ? 'new-password' : 'current-password');
-  $('#err').hidden = true;
-}
-
-document.querySelectorAll('#tabs .seg').forEach((b) => {
-  b.onclick = () => setTab(b.dataset.tab);
-});
+let timer = null;
 
 function fail(msg) {
   const box = $('#err');
   box.textContent = msg;
   box.hidden = false;
+  $('#hint').hidden = true;
+}
+
+function hint(msg) {
+  const box = $('#hint');
+  box.textContent = msg;
+  box.hidden = false;
+  $('#err').hidden = true;
+}
+
+async function sendCode() {
+  const phone = $('#phone').value.trim();
+  if (!/^1[3-9]\d{9}$/.test(phone)) { fail('请输入正确的 11 位手机号'); return; }
+
+  const btn = $('#send');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/auth/send-code', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || '发送失败');
+
+    hint(data.message + (data.dev_code ? `　验证码：${data.dev_code}` : ''));
+
+    // 60 秒倒计时，和发送间隔对齐——不然用户点了会收到「太频繁」
+    let s = 60;
+    btn.textContent = `${s}s 后重发`;
+    timer = setInterval(() => {
+      s -= 1;
+      if (s <= 0) {
+        clearInterval(timer);
+        btn.disabled = false;
+        btn.textContent = '发送验证码';
+      } else {
+        btn.textContent = `${s}s 后重发`;
+      }
+    }, 1000);
+  } catch (e) {
+    fail(e.message);
+    btn.disabled = false;
+    btn.textContent = '发送验证码';
+  }
 }
 
 async function submit() {
-  const username = $('#username').value.trim();
-  const password = $('#password').value;
-  if (!username || !password) { fail('用户名和密码都要填'); return; }
+  const phone = $('#phone').value.trim();
+  const code = $('#code').value.trim();
+  if (!/^1[3-9]\d{9}$/.test(phone)) { fail('请输入正确的 11 位手机号'); return; }
+  if (!/^\d{6}$/.test(code)) { fail('请输入 6 位验证码'); return; }
 
   const btn = $('#submit');
   btn.disabled = true;
-  const old = btn.textContent;
-  btn.textContent = tab === 'register' ? '注册中…' : '登录中…';
+  btn.textContent = '登录中…';
   try {
-    const res = await fetch(`/api/auth/${tab}`, {
+    const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        username, password,
-        display_name: $('#display-name').value.trim(),
-      }),
+      body: JSON.stringify({ phone, code }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || '失败');
+    if (!res.ok) throw new Error(data.detail || '登录失败');
     location.href = '/';
   } catch (e) {
     fail(e.message);
     btn.disabled = false;
-    btn.textContent = old;
+    btn.textContent = '登录 / 注册';
   }
 }
 
+$('#send').onclick = sendCode;
 $('#submit').onclick = submit;
-document.querySelectorAll('input').forEach((i) => {
-  i.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
-});
-$('#username').focus();
+$('#phone').onkeydown = (e) => { if (e.key === 'Enter') $('#code').focus(); };
+$('#code').onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+$('#phone').focus();
 </script>
 </body>
 </html>
