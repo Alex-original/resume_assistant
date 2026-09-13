@@ -321,3 +321,91 @@ class TestBackNavigationContract:
         i = src.index('async function doFinish')
         seg = src[i:i + 900]
         assert 'state.backStack.length = 0' in seg, '结束面试后要清空返回栈'
+
+
+class TestNoPiiInRepo:
+    """
+    ★ 回归：仓库是**公开**的，代码和文档里不能出现真实个人信息。
+
+    踩过的坑：交付验收表里直接写了一个真实手机号，差点推到公开仓库。
+    这类东西一旦推上去，从 git 历史里删都删不干净。
+
+    ⚠️ 这个测试本身**不能**把真实值写成字面量——那等于换个地方泄漏。
+    所以走两条路：
+      1. **结构化模式**：手机号 / 邮箱 / 云厂商 key 的形状（不依赖具体值）
+      2. **本地黑名单**：真实姓名、雇主这些没法结构化的，放在
+         `data/pii-blocklist.txt`（已被 .gitignore 忽略），本地跑才生效
+    """
+
+    SCAN_SUFFIX = ('.py', '.md', '.html', '.js', '.css', '.yml', '.yaml',
+                   '.json', '.sh', '.example', '.txt', '.conf')
+    SKIP_DIRS = {'.venv', 'data', '__pycache__', '.pytest_cache', 'node_modules'}
+
+    # 测试里自己用的假号，不该被当成泄漏
+    FAKE_PHONES = {
+        '13800000000', '13800000001', '13800000002', '13800000003',
+        '13900139000', '13800138000', '13100000000', '13000000000',
+    }
+    FAKE_EMAIL_DOMAINS = ('example.com', 'test.com', 'localhost')
+
+    @classmethod
+    def _structural_hits(cls, text):
+        import re
+        hits = []
+        for m in re.finditer(r'\b1[3-9]\d{9}\b', text):
+            if m.group(0) not in cls.FAKE_PHONES:
+                hits.append(f'手机号 {m.group(0)[:3]}****{m.group(0)[-4:]}')
+        for m in re.finditer(r'[\w.+-]+@[\w-]+\.[\w.]+', text):
+            domain = m.group(0).split('@')[-1]
+            if not any(domain.endswith(d) for d in cls.FAKE_EMAIL_DOMAINS):
+                hits.append(f'邮箱 {m.group(0)[:3]}***@{domain}')
+        for m in re.finditer(r'LTAI[a-zA-Z0-9]{12,}', text):
+            hits.append(f'阿里云 AccessKeyId {m.group(0)[:8]}…')
+        for m in re.finditer(r'sk-[a-zA-Z0-9]{20,}', text):
+            hits.append(f'API key {m.group(0)[:8]}…')
+        return hits
+
+    @classmethod
+    def _local_blocklist(cls):
+        """真实姓名、雇主这类没法结构化的，放本地黑名单（不进仓库）。"""
+        path = Path(__file__).resolve().parent.parent / 'data' / 'pii-blocklist.txt'
+        if not path.is_file():
+            return []
+        return [ln.strip() for ln in path.read_text(encoding='utf-8').splitlines()
+                if ln.strip() and not ln.startswith('#')]
+
+    def test_no_real_pii_in_source(self):
+        root = Path(__file__).resolve().parent.parent
+        blocklist = self._local_blocklist()
+        me = Path(__file__).resolve()
+        hits = []
+        for path in root.rglob('*'):
+            if not path.is_file() or path.suffix not in self.SCAN_SUFFIX:
+                continue
+            if any(part in self.SKIP_DIRS for part in path.parts):
+                continue
+            if path.resolve() == me:
+                continue          # 自己当然包含这些模式
+            try:
+                text = path.read_text(encoding='utf-8')
+            except (OSError, UnicodeDecodeError):
+                continue
+            for h in self._structural_hits(text):
+                hits.append(f'{path.relative_to(root)}: {h}')
+            for word in blocklist:
+                if word in text:
+                    hits.append(f'{path.relative_to(root)}: 命中本地黑名单词条')
+        assert not hits, '文件里有真实个人信息，不能进公开仓库：\n  ' + '\n  '.join(hits)
+
+    def test_env_example_has_only_placeholders(self):
+        """模板文件里绝不能出现真 key。"""
+        text = (Path(__file__).resolve().parent.parent
+                / '.env.example').read_text(encoding='utf-8')
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            key, _, value = line.partition('=')
+            if any(t in key.upper() for t in ('KEY', 'SECRET', 'PASSWORD')):
+                assert not value or value.startswith('你的'), \
+                    f'{key} 在模板里有真值：{value[:8]}…'

@@ -34,7 +34,7 @@
 | 前端 | 原生 ES Module，**无构建步骤** |
 | AI | DeepSeek（文本）+ 阿里云百炼 DashScope（视觉 / ASR / TTS） |
 | 部署 | Docker + Compose；对外 HTTPS 复用服务器已有的 nginx（或自带 Caddy） |
-| 测试 | pytest，**258 条**，AI 全部 mock，10 秒内跑完 |
+| 测试 | pytest，**260 条**，AI 全部 mock，10 秒内跑完 |
 
 ---
 
@@ -81,7 +81,7 @@ cp .env.example .env
 ## 跑测试
 
 ```bash
-.venv/bin/python -m pytest                 # 258 条，几秒钟
+.venv/bin/python -m pytest                 # 260 条，几秒钟
 .venv/bin/python tests/e2e_pipeline.py     # 真实调 AI 的端到端链路（会花钱）
 ```
 
@@ -128,7 +128,7 @@ app/
 web/              原生 SPA（无构建步骤）
 deploy/           nginx server block 模板
 scripts/          部署与文档生成脚本
-tests/            pytest（258 条）
+tests/            pytest（260 条）
 ```
 
 ---
