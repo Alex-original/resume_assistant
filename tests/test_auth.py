@@ -436,3 +436,64 @@ class TestOrphanAccounts:
             auth.bind_phone(worker['id'], '123')
         with pytest.raises(ValueError):
             auth.bind_phone(999999, '13800000003')
+
+
+class TestLoginPageDesign:
+    """
+    ★ 回归：登录页要按设计稿渲染，而且**两套布局要共用同一份逻辑**。
+
+    设计稿里移动端和桌面端是两套 DOM（CSS 切换显示），表单元素因此各有一份。
+    这里最容易踩的坑：JS 用 getElementById 抓到的是**隐藏的那一份**，
+    用户在可见的框里输入，代码却在读另一个框——表现就是"点了没反应"。
+    """
+
+    def test_renders_both_layouts(self, solo):
+        html = solo.get('/login').text
+        assert 'class="lm"' in html, '缺移动端布局'
+        assert 'class="ld"' in html, '缺桌面端布局'
+        assert 'class="ld-left"' in html, '缺桌面端左侧品牌区'
+        assert 'class="ld-form-inner"' in html, '缺桌面端表单区'
+
+    def test_form_elements_are_class_based_not_id_based(self, solo):
+        """两套布局各有一份表单，所以必须用 class 选择器，不能用 id。"""
+        html = solo.get('/login').text
+        for cls in ('js-phone', 'js-code', 'js-send', 'js-submit', 'js-msg'):
+            assert html.count(cls) >= 2, f'{cls} 应该两套布局各出现一次'
+        for bad in ('id="phone"', 'id="code"', 'id="send"', 'id="submit"'):
+            assert bad not in html, f'不该用 {bad}——会抓到隐藏的那一份'
+
+    def test_no_dead_agreement_or_register_links(self, solo):
+        """
+        设计稿有「用户协议/隐私政策」勾选和「立即注册」链接，但本项目
+        没有这两个页面、也没有独立注册流程。留着就是死链接和假承诺。
+        """
+        html = solo.get('/login').text
+        assert '用户协议' not in html, '没有用户协议页，别放这个勾选'
+        assert '隐私政策' not in html, '没有隐私政策页，别放这个勾选'
+        assert '立即注册' not in html, '本项目首次登录自动建号，没有独立注册'
+        assert '首次登录会自动创建账号' in html, '要如实说明建号规则'
+
+    def test_wechat_login_is_marked_coming_soon(self, solo):
+        """微信登录没实现，按钮必须是禁用的并写明「即将支持」。"""
+        import re
+        html = solo.get('/login').text
+        # 找到包含「微信登录」的那个 <button ...>...</button> 整段
+        btns = [m.group(0) for m in re.finditer(r'<button[^>]*>.*?</button>', html, re.S)
+                if '微信登录' in m.group(0)]
+        assert len(btns) == 2, f'两套布局各应有一个微信按钮，实际 {len(btns)} 个'
+        for b in btns:
+            assert 'disabled' in b, '微信登录没实现，按钮应该 disabled'
+            assert '即将支持' in b, '要明确告诉用户还没做'
+
+    def test_login_css_is_served(self, solo):
+        """登录页用独立的 login.css——不去动应用内的 style.css。"""
+        html = solo.get('/login').text
+        assert '/static/css/login.css' in html
+        r = solo.get('/static/css/login.css')
+        assert r.status_code == 200
+        css = r.text
+        # 设计稿的关键尺寸
+        assert 'grid-template-columns: 720px 1fr' in css, '桌面端栅格没按稿子'
+        assert 'width: 108px' in css, '获取验证码按钮宽度没按稿子'
+        assert 'min-width: 1024px' in css, '断点没按稿子（1024px）'
+        assert '.lm { display: none; }' in css, '桌面端没隐藏移动端布局'

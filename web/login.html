@@ -5,68 +5,215 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#F6F7F9">
 <title>求职助手 · 登录</title>
-<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="/static/css/login.css">
 </head>
 <body>
 
-<div class="auth-wrap">
-  <div class="auth-brand">
-    <span class="brand-dot"></span>
-    <span class="brand-name">求职助手</span>
+<!-- ═══════════ 移动端（< 1024px）═══════════ -->
+<div class="lm">
+  <div class="lm-brand">
+    <div class="lm-logo">
+      <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+        <path d="M6 20l5-6 5 4 8-9" stroke="#fff" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M21 9h4v4" stroke="#fff" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="lm-name">求职助手</div>
   </div>
 
-  <div class="auth-card">
-    <label class="fld">
-      <span>手机号</span>
-      <input type="tel" id="phone" inputmode="numeric" autocomplete="tel"
-             maxlength="11" placeholder="11 位手机号">
-    </label>
+  <h1 class="lm-title">欢迎回来</h1>
+  <p class="lm-sub">登录你的求职工作台，继续打磨面试</p>
 
-    <label class="fld">
-      <span>验证码</span>
-      <div class="code-row">
-        <input type="text" id="code" inputmode="numeric" autocomplete="one-time-code"
-               maxlength="6" placeholder="6 位数字">
-        <button class="btn btn--soft code-btn" id="send">发送验证码</button>
+  <label class="lm-field">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <rect x="4" y="2" width="10" height="14" rx="2" stroke="#8A94A3" stroke-width="1.4"/>
+      <path d="M8 13h2" stroke="#8A94A3" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+    <input class="js-phone" type="tel" inputmode="numeric" autocomplete="tel"
+           maxlength="11" placeholder="请输入手机号">
+  </label>
+
+  <div class="lm-code-row">
+    <label class="lm-field">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <rect x="3.5" y="7" width="11" height="8" rx="2" stroke="#8A94A3" stroke-width="1.4"/>
+        <path d="M6 7V5.5a3 3 0 016 0V7" stroke="#8A94A3" stroke-width="1.4"/>
+      </svg>
+      <input class="js-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+             maxlength="6" placeholder="请输入验证码">
+    </label>
+    <button class="lm-get js-send">获取验证码</button>
+  </div>
+
+  <div class="lm-msg js-msg" hidden></div>
+
+  <button class="lm-login js-submit">登录</button>
+
+  <div class="lm-agree">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+      <path d="M10 2l6 2.5v5c0 3.6-2.5 6.9-6 8-3.5-1.1-6-4.4-6-8v-5L10 2z"
+            stroke="#22A06B" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M7.5 10l1.8 1.8L13 8" stroke="#22A06B" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>首次登录会自动创建账号，你的数据只有你自己能看到</span>
+  </div>
+
+  <div class="lm-div">
+    <span class="lm-div-l"></span><span class="lm-div-t">其他登录方式</span><span class="lm-div-r"></span>
+  </div>
+
+  <button class="lm-wechat" disabled>
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <circle cx="7.5" cy="8" r="5" fill="#07C160"/>
+      <circle cx="13.5" cy="12" r="4" fill="#07C160"/>
+      <circle cx="6" cy="7" r="1.1" fill="#fff"/>
+      <circle cx="9.5" cy="8.5" r="1.1" fill="#fff"/>
+    </svg>
+    微信登录<span class="soon">即将支持</span>
+  </button>
+</div>
+
+<!-- ═══════════ 桌面端（≥ 1024px）═══════════ -->
+<div class="ld">
+  <div class="ld-deco"></div>
+
+  <div class="ld-left">
+    <div class="ld-brand-row">
+      <div class="ld-logo">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <path d="M7 24l6-8 6 5 10-11" stroke="#fff" stroke-width="3"
+                stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M25 10h5v5" stroke="#fff" stroke-width="3"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </div>
-    </label>
+      <div class="ld-name">求职助手</div>
+    </div>
 
-    <div class="notice notice--danger" id="err" hidden></div>
-    <div class="notice notice--info" id="hint" hidden></div>
+    <div class="ld-slogan"><div>让每一次面试</div><div>都有准备</div></div>
+    <p class="ld-sub">求职工作台 · 读懂项目 · 模拟面试 · 智能复盘</p>
 
-    <button class="btn btn--primary btn--block btn--lg" id="submit">登录 / 注册</button>
+    <div class="ld-vp">
+      <div class="ld-vp-item">
+        <span class="vp-dot"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" fill="#3D6BFF" opacity=".18"/><path d="M6 10l3 3 6-7" stroke="#3D6BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        读懂你的项目与岗位要求
+      </div>
+      <div class="ld-vp-item">
+        <span class="vp-dot"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" fill="#3D6BFF" opacity=".18"/><path d="M6 10l3 3 6-7" stroke="#3D6BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        模拟真实面试，语音陪练
+      </div>
+      <div class="ld-vp-item">
+        <span class="vp-dot"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" fill="#3D6BFF" opacity=".18"/><path d="M6 10l3 3 6-7" stroke="#3D6BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        记录每一次表现，智能复盘
+      </div>
+    </div>
 
-    <p class="auth-note">
-      没注册过会自动创建账号。<br>
-      每个人有自己独立的数据空间——简历、面试记录、材料都只有你自己能看到。
-    </p>
+    <div class="ld-copy">2026 求职助手 · 你的私人面试教练</div>
+  </div>
+
+  <div class="ld-right">
+    <div class="ld-form-inner">
+      <h1 class="lm-title ld-title">欢迎回来</h1>
+      <p class="lm-sub ld-sub-r">登录你的求职工作台，继续打磨面试</p>
+
+      <label class="lm-field">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <rect x="4" y="2" width="10" height="14" rx="2" stroke="#8A94A3" stroke-width="1.4"/>
+          <path d="M8 13h2" stroke="#8A94A3" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <input class="js-phone" type="tel" inputmode="numeric" autocomplete="tel"
+               maxlength="11" placeholder="请输入手机号">
+      </label>
+
+      <div class="lm-code-row">
+        <label class="lm-field">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect x="3.5" y="7" width="11" height="8" rx="2" stroke="#8A94A3" stroke-width="1.4"/>
+            <path d="M6 7V5.5a3 3 0 016 0V7" stroke="#8A94A3" stroke-width="1.4"/>
+          </svg>
+          <input class="js-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                 maxlength="6" placeholder="请输入验证码">
+        </label>
+        <button class="lm-get js-send">获取验证码</button>
+      </div>
+
+      <div class="lm-msg js-msg" hidden></div>
+
+      <button class="lm-login js-submit">登录</button>
+
+      <div class="lm-agree">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+          <path d="M10 2l6 2.5v5c0 3.6-2.5 6.9-6 8-3.5-1.1-6-4.4-6-8v-5L10 2z"
+                stroke="#22A06B" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M7.5 10l1.8 1.8L13 8" stroke="#22A06B" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>首次登录会自动创建账号，你的数据只有你自己能看到</span>
+      </div>
+
+      <div class="lm-div">
+        <span class="lm-div-l"></span><span class="lm-div-t">其他登录方式</span><span class="lm-div-r"></span>
+      </div>
+
+      <button class="lm-wechat" disabled>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <circle cx="7.5" cy="8" r="5" fill="#07C160"/>
+          <circle cx="13.5" cy="12" r="4" fill="#07C160"/>
+          <circle cx="6" cy="7" r="1.1" fill="#fff"/>
+          <circle cx="9.5" cy="8.5" r="1.1" fill="#fff"/>
+        </svg>
+        微信登录<span class="soon">即将支持</span>
+      </button>
+    </div>
   </div>
 </div>
 
 <script type="module">
-const $ = (s) => document.querySelector(s);
+/* 表单在移动端和桌面端各渲染了一份（CSS 切换显示）。
+   所以所有选择器都取「当前可见的那一份」——不能写 getElementById，
+   否则改的是隐藏的那份，用户看到的是另一个框。 */
+const $$ = (sel) => [...document.querySelectorAll(sel)];
+const shown = (sel) => $$(sel).find((el) => el.offsetParent !== null) || $$(sel)[0];
+
+const PHONE_RE = /^1[3-9]\d{9}$/;
 let timer = null;
 
-function fail(msg) {
-  const box = $('#err');
-  box.textContent = msg;
-  box.hidden = false;
-  $('#hint').hidden = true;
+function say(text, kind = 'err') {
+  $$('.js-msg').forEach((box) => {
+    box.textContent = text;
+    box.className = `lm-msg js-msg ${kind}`;
+    box.hidden = false;
+  });
+}
+function clearMsg() {
+  $$('.js-msg').forEach((box) => { box.hidden = true; });
 }
 
-function hint(msg) {
-  const box = $('#hint');
-  box.textContent = msg;
-  box.hidden = false;
-  $('#err').hidden = true;
+/* 让两套输入框内容同步：手机上填了，转屏到桌面端不该是空的 */
+function mirror(from, sel) {
+  $$(sel).forEach((el) => { if (el !== from) el.value = from.value; });
 }
+
+$$('.js-phone').forEach((el) => {
+  el.addEventListener('input', () => mirror(el, '.js-phone'));
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') shown('.js-code').focus();
+  });
+});
+$$('.js-code').forEach((el) => {
+  el.addEventListener('input', () => mirror(el, '.js-code'));
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+});
 
 async function sendCode() {
-  const phone = $('#phone').value.trim();
-  if (!/^1[3-9]\d{9}$/.test(phone)) { fail('请输入正确的 11 位手机号'); return; }
+  const phone = shown('.js-phone').value.trim();
+  if (!PHONE_RE.test(phone)) { say('请输入正确的 11 位手机号'); shown('.js-phone').focus(); return; }
 
-  const btn = $('#send');
-  btn.disabled = true;
+  const btns = $$('.js-send');
+  btns.forEach((b) => { b.disabled = true; });
   try {
     const res = await fetch('/api/auth/send-code', {
       method: 'POST',
@@ -76,37 +223,34 @@ async function sendCode() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || '发送失败');
 
-    hint(data.message + (data.dev_code ? `　验证码：${data.dev_code}` : ''));
+    say(data.message + (data.dev_code ? `　验证码：${data.dev_code}` : ''), 'ok');
 
-    // 60 秒倒计时，和发送间隔对齐——不然用户点了会收到「太频繁」
+    // 60 秒倒计时，和服务端的发送间隔对齐
     let s = 60;
-    btn.textContent = `${s}s 后重发`;
+    btns.forEach((b) => { b.textContent = `${s}s 后重发`; });
     timer = setInterval(() => {
       s -= 1;
       if (s <= 0) {
         clearInterval(timer);
-        btn.disabled = false;
-        btn.textContent = '发送验证码';
+        btns.forEach((b) => { b.disabled = false; b.textContent = '获取验证码'; });
       } else {
-        btn.textContent = `${s}s 后重发`;
+        btns.forEach((b) => { b.textContent = `${s}s 后重发`; });
       }
     }, 1000);
   } catch (e) {
-    fail(e.message);
-    btn.disabled = false;
-    btn.textContent = '发送验证码';
+    say(e.message);
+    btns.forEach((b) => { b.disabled = false; b.textContent = '获取验证码'; });
   }
 }
 
 async function submit() {
-  const phone = $('#phone').value.trim();
-  const code = $('#code').value.trim();
-  if (!/^1[3-9]\d{9}$/.test(phone)) { fail('请输入正确的 11 位手机号'); return; }
-  if (!/^\d{6}$/.test(code)) { fail('请输入 6 位验证码'); return; }
+  const phone = shown('.js-phone').value.trim();
+  const code = shown('.js-code').value.trim();
+  if (!PHONE_RE.test(phone)) { say('请输入正确的 11 位手机号'); shown('.js-phone').focus(); return; }
+  if (!/^\d{6}$/.test(code)) { say('请输入 6 位验证码'); shown('.js-code').focus(); return; }
 
-  const btn = $('#submit');
-  btn.disabled = true;
-  btn.textContent = '登录中…';
+  const btns = $$('.js-submit');
+  btns.forEach((b) => { b.disabled = true; b.textContent = '登录中…'; });
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
@@ -117,17 +261,14 @@ async function submit() {
     if (!res.ok) throw new Error(data.detail || '登录失败');
     location.href = '/';
   } catch (e) {
-    fail(e.message);
-    btn.disabled = false;
-    btn.textContent = '登录 / 注册';
+    say(e.message);
+    btns.forEach((b) => { b.disabled = false; b.textContent = '登录'; });
   }
 }
 
-$('#send').onclick = sendCode;
-$('#submit').onclick = submit;
-$('#phone').onkeydown = (e) => { if (e.key === 'Enter') $('#code').focus(); };
-$('#code').onkeydown = (e) => { if (e.key === 'Enter') submit(); };
-$('#phone').focus();
+$$('.js-send').forEach((b) => { b.onclick = sendCode; });
+$$('.js-submit').forEach((b) => { b.onclick = submit; });
+shown('.js-phone').focus();
 </script>
 </body>
 </html>
