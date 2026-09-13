@@ -1,0 +1,38 @@
+# 求职助手 · 复用服务器上已有的 nginx
+#
+#   docker compose -f docker-compose.behind-nginx.yml up -d --build
+#
+# 和 docker-compose.yml 的区别：**不跑 Caddy**。
+#
+# 为什么：很多服务器上本来就有 nginx 在给别的站点做反代（占着 80/443）。
+# 再起一个 Caddy 抢这两个端口，轻则起不来，重则把别人的站点搞挂。
+# 这种机器上应该让应用退到 127.0.0.1:7870，由现有 nginx 转发进来。
+
+services:
+  app:
+    build: .
+    image: job-assistant:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Asia/Shanghai
+      WORKSPACE_DIR: /app
+    volumes:
+      - ./data:/app/data
+    # ★ 只绑本机回环，不对外暴露。外部流量一律走 nginx。
+    #   写成 "7870:7870" 的话，别人用 http://IP:7870 就能绕过 HTTPS，
+    #   而手机麦克风在非 HTTPS 下直接用不了。
+    ports:
+      - "127.0.0.1:7870:7870"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7870/health', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
