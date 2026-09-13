@@ -15,7 +15,12 @@ WORKDIR /app
 
 # 先把依赖单独拷进来装：改代码不会让依赖层缓存失效，重建快很多
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# PyPI 源。默认官方源；国内服务器换成镜像能快很多——
+# 实测（阿里云主机）：官方 68 kB/s，阿里云镜像 456 kB/s，差 6.7 倍。
+# 不改的话装 pillow 那一个包就要 4 分钟。
+ARG PIP_INDEX_URL=https://pypi.org/simple/
+RUN pip install --no-cache-dir --index-url "${PIP_INDEX_URL}" -r requirements.txt
 
 COPY app/ ./app/
 COPY web/ ./web/

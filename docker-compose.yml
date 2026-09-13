@@ -11,7 +11,11 @@
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        # 国内服务器走镜像源，快 6 倍以上；海外服务器把它设成官方源
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
     image: job-assistant:latest
     restart: unless-stopped
     env_file: .env
